@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A role that the kore workload identity will assume.
+Parameters:
+  KoreIAMRoleName:
+    Type: String
+    Description: This will be the resulting role name
+    MinLength: 5
+  AWSAccountID:
+    Type: String
+    Description: The AWS Account ID of the cluster
+    MinLength: 5
+  KoreManagemmentClusterOIDCEndpoint:
+    Type: String
+    Description: provided OIDC provider hostname and path e.g. x.y/path (NO https)
+    MinLength: 5
+  KoreServiceNamespace:
+    Type: String
+    Description: The namsepace of the Kore Kubernetes service account
+    MinLength: 4
+  KoreServiceName:
+    Type: String
+    Description: The nams of the Kore Kubernetes service account
+    MinLength: 5
+Resources:
+  KoreMasterWorkloadIdentityRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Ref: KoreIAMRoleName
+      AssumeRolePolicyDocument: !Sub
+        - |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Federated": "arn:aws:iam::${AWSAccountID}:oidc-provider/${OidcProviderEndpoint}"
+                },
+                "Action": "sts:AssumeRoleWithWebIdentity",
+                "Condition": {
+                    "StringEquals": {
+                        "${OidcProviderEndpoint}:sub": "system:serviceaccount:${Namespace}:${Name}"
+                    }
+                }
+              }
+            ]
+          }
+        - AWSAccountID: !Ref AWSAccountID
+          OidcProviderEndpoint: !Ref KoreManagemmentClusterOIDCEndpoint
+          Namespace: !Ref KoreServiceNamespace
+          Name: !Ref KoreServiceName
+      ManagedPolicyArns: []
+      Policies:
+      - PolicyName: AssumeKoreRoles
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Resource: arn:aws:iam::*:role/kore-*
+Outputs:
+  KoreMasterWorkloadIdentityRoleARN:
+    Description: This is the ARN to supply to kore
+    Value:
+      Fn::GetAtt:
+      - KoreMasterWorkloadIdentityRole
+      - Arn

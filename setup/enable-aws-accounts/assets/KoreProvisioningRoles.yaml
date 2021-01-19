@@ -1,0 +1,320 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: KoreProvisioningRoles with associated IAM policies
+Parameters:
+  AccountManager:
+    Description: The IAM role name for the AWS Accounts role for direct account management.
+    MaxLength: 64
+    MinLength: 1
+    Type: String
+  NetworkManager:
+    Description: The IAM role name for a Kore VPC controller.
+    MaxLength: 64
+    MinLength: 1
+    Type: String
+  ClusterManager:
+    Description: The IAM role name for a Kore EKS controller.
+    MaxLength: 64
+    MinLength: 1
+    Type: String
+  DNSZoneManager:
+    Description: The IAM role name for the Kore DNS service provider.
+    MaxLength: 64
+    MinLength: 1
+    Type: String
+  RegistryManager:
+    Description: The IAM role name for the Kore ECR Registry operator.
+    MaxLength: 64
+    MinLength: 1
+    Type: String
+  AllowAssumeFromARN:
+    Description: The ARN for the Kore identity user / role.
+    MinLength: 1
+    Type: String
+Outputs:
+  NetworkManager:
+    Description: This is the ARN to supply to kore for VPC provisioning
+    Value:
+      Fn::GetAtt:
+      - KoreVPCRole
+      - Arn
+  ClusterManager:
+    Description: This is the ARN to supply to kore
+    Value:
+      Fn::GetAtt:
+      - KoreEKSRole
+      - Arn
+  DNSZoneManager:
+    Description: This is the ARN to supply to kore
+    Value:
+      Fn::GetAtt:
+      - KoreDNSRole
+      - Arn
+Resources:
+  KoreAccountManager:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Ref: AccountManager
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            AWS:
+            - Ref: AllowAssumeFromARN
+      ManagedPolicyArns: []
+      Policies:
+      - PolicyName: KoreRemoveLegacyAdminUser
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Effect: Allow
+            Action:
+            - iam:GetUser
+            - iam:ListUserPolicies
+            - iam:ListAttachedUserPolicies
+            - iam:DeleteUser
+            - iam:DeleteUserPolicy
+            - iam:DetachUserPolicy
+            - iam:ListAccessKeys
+            - iam:DeleteAccessKey
+            Resource:
+            - arn:aws:iam::*:user/kore-account-admin
+  KoreEKSPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: KoreEKS
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Action:
+          - eks:AccessKubernetesApi
+          - eks:DescribeCluster
+          - eks:CreateCluster
+          - eks:UpdateClusterConfig
+          - eks:DeleteCluster
+          - eks:TagResource
+          - eks:DescribeNodegroup
+          - eks:ListNodegroups
+          - eks:CreateNodegroup
+          - eks:UpdateNodegroupConfig
+          - eks:DeleteNodegroup
+          Effect: Allow
+          Resource: '*'
+        - Action: iam:PassRole
+          Condition:
+            StringEquals:
+              iam:PassedToService: eks.amazonaws.com
+          Effect: Allow
+          Resource: '*'
+        - Action:
+          - iam:GetUser
+          - iam:GetRole
+          - iam:CreateRole
+          - iam:DeleteRole
+          - iam:TagRole
+          - iam:ListAttachedRolePolicies
+          - iam:AttachRolePolicy
+          - iam:DetachRolePolicy
+          - iam:UpdateRoleDescription
+          - iam:UpdateAssumeRolePolicy
+          - iam:PutRolePolicy
+          - iam:DeleteRolePolicy
+          - iam:GetOpenIDConnectProvider
+          - iam:CreateOpenIDConnectProvider
+          - iam:DeleteOpenIDConnectProvider
+          - iam:CreateServiceLinkedRole
+          Effect: Allow
+          Resource: '*'
+        - Action:
+          - ec2:DescribeSubnets
+          - ec2:DescribeInstances
+          - ec2:CreateTags
+          Effect: Allow
+          Resource: '*'
+        - Action:
+          - sts:GetCallerIdentity
+          Effect: Allow
+          Resource: '*'
+        - Action:
+            - iam:CreatePolicy*
+            - iam:GetPolicy*
+            - iam:DeletePolicy*
+            - iam:ListPolicyVersions
+          Effect: Allow
+          Resource:
+            - arn:aws:iam::*:policy/kore-*
+  KoreEKSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Ref: ClusterManager
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            AWS:
+            - Ref: AllowAssumeFromARN
+      ManagedPolicyArns:
+      - Ref: KoreEKSPolicy
+  KoreVPCPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: KoreVPC
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Action:
+          - ec2:DescribeVpcs
+          - ec2:CreateVpc
+          - ec2:DeleteVpc
+          - ec2:CreateTags
+          - ec2:ModifyVpcAttribute
+          - ec2:DescribeInternetGateways
+          - ec2:DetachInternetGateway
+          - ec2:CreateInternetGateway
+          - ec2:AttachInternetGateway
+          - ec2:DeleteInternetGateway
+          - ec2:DescribeAvailabilityZones
+          - ec2:DescribeRouteTables
+          - ec2:CreateRouteTable
+          - ec2:AssociateRouteTable
+          - ec2:CreateRoute
+          - ec2:DeleteRouteTable
+          - ec2:DescribeSubnets
+          - ec2:CreateSubnet
+          - ec2:DeleteSubnet
+          - ec2:DescribeNatGateWays
+          - ec2:CreateNatGateway
+          - ec2:DeleteNatGateway
+          - ec2:DescribeSecurityGroups
+          - ec2:CreateSecurityGroup
+          - ec2:DescribeSecurityGroups
+          - ec2:DeleteSecurityGroup
+          - ec2:DescribeAddresses
+          - ec2:AllocateAddress
+          - ec2:ReleaseAddress
+          - ec2:DescribeNetworkInterfaces
+          - ec2:DeleteNetworkInterface
+          - eks:DescribeCluster
+          - elasticloadbalancing:DescribeLoadBalancers
+          - elasticloadbalancing:DescribeTags
+          - elasticloadbalancing:DeleteLoadBalancer
+          Effect: Allow
+          Resource: '*'
+  KoreVPCRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Ref: NetworkManager
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            AWS:
+            - Ref: AllowAssumeFromARN
+      ManagedPolicyArns:
+      - Ref: KoreVPCPolicy
+  KoreDNSPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: KoreDNSZone
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Action:
+          - route53:ListHostedZones
+          - route53:GetHostedZone
+          - route53:CreateHostedZone
+          - route53:DeleteHostedZone
+          - route53:ChangeTagsForResource
+          - route53:ListResourceRecordSets
+          - route53:ChangeResourceRecordSets
+          - route53:ListTagsForResource
+          Effect: Allow
+          Resource: '*'
+        - Action:
+          - sts:GetCallerIdentity
+          Effect: Allow
+          Resource: '*'
+        - Action:
+          - iam:GetRole
+          - iam:CreateRole
+          - iam:TagRole
+          - iam:UpdateRoleDescription
+          - iam:UpdateAssumeRolePolicy
+          - iam:DeleteRolePolicy
+          - iam:PutRolePolicy
+          Effect: Allow
+          Resource: '*'
+  KoreDNSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Ref: DNSZoneManager
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            AWS:
+            - Ref: AllowAssumeFromARN
+      ManagedPolicyArns:
+      - Ref: KoreDNSPolicy
+  KoreRegistryPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: KoreRegistryManager
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Action:
+          - "ecr:*"
+          Effect: Allow
+          Resource: '*'
+        - Action:
+          - sts:GetCallerIdentity
+          Effect: Allow
+          Resource: '*'
+        - Action:
+          - "iam:AttachUserPolicy"
+          - "iam:CreateAccessKey"
+          - "iam:CreateUser"
+          - "iam:DeleteAccessKey"
+          - "iam:DeleteUser"
+          - "iam:DeleteUserPolicy"
+          - "iam:DetachUserPolicy"
+          - "iam:GetUser"
+          - "iam:GetUserPolicy"
+          - "iam:ListAccessKeys"
+          - "iam:ListAttachedUserPolicies"
+          - "iam:ListPolicies"
+          - "iam:ListUserTags"
+          - "iam:ListUsers"
+          - "iam:PutUserPolicy"
+          - "iam:UntagUser"
+          - "iam:UpdateAccessKey"
+          - "iam:TagUser"
+          Effect: Allow
+          Resource: '*'
+  KoreRegistryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Ref: RegistryManager
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            AWS:
+            - Ref: AllowAssumeFromARN
+      ManagedPolicyArns:
+      - Ref: KoreRegistryPolicy

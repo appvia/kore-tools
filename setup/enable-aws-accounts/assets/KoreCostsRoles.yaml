@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A role with access to setup and run costs audits in a billing account
+Parameters:
+  CostsManager:
+    Type: String
+    Description: The IAM name for a a costs role.
+    MinLength: 1
+    MaxLength: 64
+    Default: kore-test-costs
+  AllowAssumeFromARN:
+    Description: The ARN for the Kore identity user / role.
+    MinLength: 1
+    Type: String
+Outputs:
+  KoreCostsManagerARN:
+    Description: This is the ARN of the Costs user
+    Value:
+      Fn::GetAtt:
+        - KoreCostsManager
+        - Arn
+Resources:
+  KoreCostsManager:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Ref: CostsManager
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            AWS:
+            - Ref: AllowAssumeFromARN
+      ManagedPolicyArns: []
+      Policies:
+      - PolicyName: KoreCostsSetup
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:ListBucket
+                - s3:ListAllMyBuckets
+                - s3:CreateBucket
+                - s3:PutBucketPolicy
+                - s3:GetObject*
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - cur:DescribeReportDefinitions
+                - cur:ModifyReportDefinition
+                - cur:PutReportDefinition
+              Resource: '*'
+      - PolicyName: KoreCostsRun
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:GetBucketPolicy
+              Resource: '*'
+      - PolicyName: KoreCostsLookup
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:GetBucketPolicy
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - pricing:GetAttributeValues
+                - pricing:GetProducts
+                - pricing:DescribeServices
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - ec2:DescribeAvailabilityZones
+                - ec2:DescribeImages
+                - ec2:DescribeSpotPriceHistory
+              Resource:
+                - '*'
